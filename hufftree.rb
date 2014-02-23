@@ -35,11 +35,15 @@ class Tree
 		@code = huffgen(alphabet, lengths)
 		@tree = Node.new
 		@alphabet.each_index{|i|
-			add(@code[i], @lengths[i], @alphabet[i])
+			if @lengths[i] != 0
+				add(@code[i], @lengths[i], @alphabet[i])
+			end
 		}
 	end
 
 	def add(code, length, value)
+		#puts "Adding code: %0*b (length %u) for: %s" %
+		#		[length, code, length, value.inspect]
 		node = @tree
 		(0...length).to_a.reverse.each{|i|
 			node = node[(code >> i) & 1]

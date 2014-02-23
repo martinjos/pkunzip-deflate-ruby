@@ -5,7 +5,7 @@ def huffgen(alphabet, lengths)
 	start = 0
 	(1..lens[-1]).each{|len|
 		num = group[len-1]
-		if num
+		if num && len > 1
 			num = num.size
 		else
 			num = 0
@@ -15,8 +15,10 @@ def huffgen(alphabet, lengths)
 	}
 	codes = [0] * alphabet.size
 	lengths.each_with_index{|length, i|
-		codes[i] = starts[length]
-		starts[length] += 1
+		if length != 0
+			codes[i] = starts[length]
+			starts[length] += 1
+		end
 	}
 	return codes
 end
