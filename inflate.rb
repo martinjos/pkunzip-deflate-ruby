@@ -49,6 +49,46 @@ def huffman_block(result, b, ll_tree, &get_dist_code)
 	return result
 end
 
+def read_dynamic_hufftrees(b)
+	num_ll_clens   = b.get(5) + 257
+	num_dist_clens = b.get(5) + 1
+	num_clen_clens = b.get(4) + 4
+	clen_clens = (0 ... num_clen_clens).map{ b.get(3) }
+	#$stderr.puts "counts: #{num_clen_clens}, #{num_ll_clens}, #{num_dist_clens}"
+	#$stderr.puts "clen code: #{clen_clens.inspect}"
+	clen_tree = Tree.new(CodeLenOrder[0...clen_clens.size], clen_clens)
+	lld_clens = []
+	num_lld_clens = num_ll_clens + num_dist_clens
+	while lld_clens.size < num_lld_clens
+		clen_code = clen_tree.read(b)
+		if clen_code < 16
+			lld_clens << clen_code
+		elsif clen_code == 16
+			raise "No code-lengths to repeat" if lld_clens.size == 0
+			rep_len = b.get(2) + 3
+			#$stderr.puts "16: repeating #{lld_clens[-1].inspect} #{rep_len} times"
+			lld_clens.concat [lld_clens[-1]] * rep_len
+		elsif clen_code == 17
+			rep_len = b.get(3) + 3
+			#$stderr.puts "17: repeating #{0} #{rep_len} times"
+			lld_clens.concat [0] * rep_len
+		elsif clen_code == 18
+			rep_len = b.get(7) + 11
+			#$stderr.puts "18: repeating #{0} #{rep_len} times"
+			lld_clens.concat [0] * rep_len
+		else
+			raise "Invalid code-length code"
+		end
+	end
+	ll_clens = lld_clens[0...num_ll_clens]
+	dist_clens = lld_clens[num_ll_clens..-1]
+	#$stderr.puts "  ll code: #{  ll_clens.inspect}"
+	#$stderr.puts "dist code: #{dist_clens.inspect}"
+	ll_tree = Tree.new((0...num_ll_clens).to_a, ll_clens)
+	dist_tree = Tree.new((0...num_dist_clens).to_a, dist_clens)
+	return [ll_tree, dist_tree]
+end
+
 def inflate(str, lfh)
 	b = BitStream.new(str)
 
@@ -66,43 +106,7 @@ def inflate(str, lfh)
 		elsif type == 0b01 # fixed Huffman
 			result = huffman_block(result, b, FixLLTree) {|b| b.get_reverse(5) }
 		elsif type == 0b10 # dynamic Huffman
-			num_ll_clens   = b.get(5) + 257
-			num_dist_clens = b.get(5) + 1
-			num_clen_clens = b.get(4) + 4
-			clen_clens = (0 ... num_clen_clens).map{ b.get(3) }
-			#$stderr.puts "counts: #{num_clen_clens}, #{num_ll_clens}, #{num_dist_clens}"
-			#$stderr.puts "clen code: #{clen_clens.inspect}"
-			clen_tree = Tree.new(CodeLenOrder[0...clen_clens.size], clen_clens)
-			lld_clens = []
-			num_lld_clens = num_ll_clens + num_dist_clens
-			while lld_clens.size < num_lld_clens
-				clen_code = clen_tree.read(b)
-				if clen_code < 16
-					lld_clens << clen_code
-				elsif clen_code == 16
-					raise "No code-lengths to repeat" if lld_clens.size == 0
-					rep_len = b.get(2) + 3
-					#$stderr.puts "16: repeating #{lld_clens[-1].inspect} #{rep_len} times"
-					lld_clens.concat [lld_clens[-1]] * rep_len
-				elsif clen_code == 17
-					rep_len = b.get(3) + 3
-					#$stderr.puts "17: repeating #{0} #{rep_len} times"
-					lld_clens.concat [0] * rep_len
-				elsif clen_code == 18
-					rep_len = b.get(7) + 11
-					#$stderr.puts "18: repeating #{0} #{rep_len} times"
-					lld_clens.concat [0] * rep_len
-				else
-					raise "Invalid code-length code"
-				end
-			end
-			ll_clens = lld_clens[0...num_ll_clens]
-			dist_clens = lld_clens[num_ll_clens..-1]
-			#$stderr.puts "  ll code: #{  ll_clens.inspect}"
-			#$stderr.puts "dist code: #{dist_clens.inspect}"
-			ll_tree = Tree.new((0...num_ll_clens).to_a, ll_clens)
-			dist_tree = Tree.new((0...num_dist_clens).to_a, dist_clens)
-
+			(ll_tree, dist_tree) = read_dynamic_hufftrees(b)
 			result = huffman_block(result, b, ll_tree) {|b| dist_tree.read(b) }
 		else
 			raise "Bad block type"
