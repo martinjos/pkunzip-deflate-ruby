@@ -65,7 +65,8 @@ def inflate(str, lfh)
 			num_dist_clens = b.get(5) + 1
 			num_clen_clens = b.get(4) + 4
 			clen_clens = (0 ... num_clen_clens).map{ b.get(3) }
-			#$stderr.puts clen_clens.inspect
+			#$stderr.puts "counts: #{num_clen_clens}, #{num_ll_clens}, #{num_dist_clens}"
+			#$stderr.puts "clen code: #{clen_clens.inspect}"
 			clen_tree = Tree.new(CodeLenOrder[0...clen_clens.size], clen_clens)
 			lld_clens = []
 			num_lld_clens = num_ll_clens + num_dist_clens
@@ -76,12 +77,15 @@ def inflate(str, lfh)
 				elsif clen_code == 16
 					raise "No code-lengths to repeat" if lld_clens.size == 0
 					rep_len = b.get(2) + 3
+					#$stderr.puts "16: repeating #{lld_clens[-1].inspect} #{rep_len} times"
 					lld_clens.concat [lld_clens[-1]] * rep_len
 				elsif clen_code == 17
 					rep_len = b.get(3) + 3
+					#$stderr.puts "17: repeating #{0} #{rep_len} times"
 					lld_clens.concat [0] * rep_len
 				elsif clen_code == 18
 					rep_len = b.get(7) + 11
+					#$stderr.puts "18: repeating #{0} #{rep_len} times"
 					lld_clens.concat [0] * rep_len
 				else
 					raise "Invalid code-length code"
@@ -89,22 +93,24 @@ def inflate(str, lfh)
 			end
 			ll_clens = lld_clens[0...num_ll_clens]
 			dist_clens = lld_clens[num_ll_clens..-1]
+			#$stderr.puts "  ll code: #{  ll_clens.inspect}"
+			#$stderr.puts "dist code: #{dist_clens.inspect}"
 			ll_tree = Tree.new((0...num_ll_clens).to_a, ll_clens)
 			dist_tree = Tree.new((0...num_dist_clens).to_a, dist_clens)
 			while true
 				llcode = ll_tree.read(b)
 				if llcode < 256
 					result += llcode.chr
-					$stderr.puts "Done literal Huffman char (#{llcode.chr.inspect})"
+					#$stderr.puts "Done literal Huffman char (#{llcode.chr.inspect})"
 				elsif llcode > 256
-					$stderr.puts "Got so far: " + result.inspect
-					$stderr.puts "Code is #{llcode}"
+					#$stderr.puts "Got so far: " + result.inspect
+					#$stderr.puts "Code is #{llcode}"
 					len = LLVSI.read(b, llcode)
 					dcode = dist_tree.read(b)
 					dist = DVSI.read(b, dcode)
-					$stderr.puts "dist=#{dist}, len=#{len}"
+					#$stderr.puts "dist=#{dist}, len=#{len}"
 					result = copy_section(result, dist, len)
-					$stderr.puts "Result: #{result.inspect}"
+					#$stderr.puts "Result: #{result.inspect}"
 				else
 					break # end of block
 				end

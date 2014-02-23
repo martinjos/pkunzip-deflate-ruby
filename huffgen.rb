@@ -14,7 +14,8 @@ def huffgen(alphabet, lengths)
 		starts[len] = start
 	}
 	codes = [0] * alphabet.size
-	lengths.each_with_index{|length, i|
+	sorted_info = [alphabet, lengths, (0...lengths.size).to_a].transpose.sort
+	sorted_info.each{|symbol, length, i|
 		if length != 0
 			codes[i] = starts[length]
 			starts[length] += 1

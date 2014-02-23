@@ -145,6 +145,7 @@ if __FILE__ == $0
 		z.inspect_filenames
 	else
 		#puts z.get_raw(ARGV[1].to_i).first.inspect
-		puts z.get(ARGV[1].to_i).inspect
+		#puts z.get(ARGV[1].to_i).inspect
+		print z.get(ARGV[1].to_i)
 	end
 end
