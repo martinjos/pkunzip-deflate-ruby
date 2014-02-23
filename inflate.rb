@@ -24,6 +24,31 @@ DVSI = VarSizeInt.new([0, 4, 6, 8, 10, 12, 14, 16, 18,
 CodeLenOrder = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3,
 				13, 2, 14, 1, 15]
 
+def huffman_block(result, b, ll_tree, &get_dist_code)
+	while true
+		llcode = ll_tree.read(b)
+		if llcode < 256
+			result += llcode.chr
+			#$stderr.puts "Done literal Huffman char (#{llcode.chr.inspect})"
+		elsif llcode > 256
+			#$stderr.puts "Got so far: " + result.inspect
+			#$stderr.puts "Code is #{llcode}"
+			len = LLVSI.read(b, llcode)
+			# Order not explicitly specified by RFC -
+			# but, empirically, it should be MSB-first.
+			# This makes sense if you consider it as a "degenerate"
+			# Huffman code.
+			dcode = get_dist_code.call(b)
+			dist = DVSI.read(b, dcode)
+			#$stderr.puts "dist=#{dist}, len=#{len}"
+			result = copy_section(result, dist, len)
+		else
+			break # end of block
+		end
+	end
+	return result
+end
+
 def inflate(str, lfh)
 	b = BitStream.new(str)
 
@@ -39,27 +64,7 @@ def inflate(str, lfh)
 			b.get_aligned_int(2) # just ~len
 			result += b.get_string(len)
 		elsif type == 0b01 # fixed Huffman
-			while true
-				llcode = FixLLTree.read(b)
-				if llcode < 256
-					result += llcode.chr
-					#$stderr.puts "Done literal Huffman char (#{llcode.chr.inspect})"
-				elsif llcode > 256
-					#$stderr.puts "Got so far: " + result.inspect
-					#$stderr.puts "Code is #{llcode}"
-					len = LLVSI.read(b, llcode)
-					# Order not explicitly specified by RFC -
-					# but, empirically, it should be MSB-first.
-					# This makes sense if you consider it as a "degenerate"
-					# Huffman code.
-					dcode = b.get_reverse(5)
-					dist = DVSI.read(b, dcode)
-					#$stderr.puts "dist=#{dist}, len=#{len}"
-					result = copy_section(result, dist, len)
-				else
-					break # end of block
-				end
-			end
+			result = huffman_block(result, b, FixLLTree) {|b| b.get_reverse(5) }
 		elsif type == 0b10 # dynamic Huffman
 			num_ll_clens   = b.get(5) + 257
 			num_dist_clens = b.get(5) + 1
@@ -97,24 +102,8 @@ def inflate(str, lfh)
 			#$stderr.puts "dist code: #{dist_clens.inspect}"
 			ll_tree = Tree.new((0...num_ll_clens).to_a, ll_clens)
 			dist_tree = Tree.new((0...num_dist_clens).to_a, dist_clens)
-			while true
-				llcode = ll_tree.read(b)
-				if llcode < 256
-					result += llcode.chr
-					#$stderr.puts "Done literal Huffman char (#{llcode.chr.inspect})"
-				elsif llcode > 256
-					#$stderr.puts "Got so far: " + result.inspect
-					#$stderr.puts "Code is #{llcode}"
-					len = LLVSI.read(b, llcode)
-					dcode = dist_tree.read(b)
-					dist = DVSI.read(b, dcode)
-					#$stderr.puts "dist=#{dist}, len=#{len}"
-					result = copy_section(result, dist, len)
-					#$stderr.puts "Result: #{result.inspect}"
-				else
-					break # end of block
-				end
-			end
+
+			result = huffman_block(result, b, ll_tree) {|b| dist_tree.read(b) }
 		else
 			raise "Bad block type"
 		end
